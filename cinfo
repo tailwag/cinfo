@@ -1,0 +1,131 @@
+#!/usr/bin/python
+
+import os
+import re
+import sys
+import time
+import argparse
+import subprocess
+
+def main (searchString, opts = ['ip', 'email', 'plan', 'owner', 'creation', 'domains']):
+    if args.limits:
+        frmStr = "%-19s: %5s"
+    else:
+        frmStr = "%-13s: %5s"
+
+    fileComm = 'sudo cat /var/cpanel/users/' + searchString
+    userFile = subprocess.Popen(fileComm, stdout=subprocess.PIPE, shell=True).communicate()[0]
+
+    fileList = userFile.split('\n')
+    
+    domList = [i for i, x in enumerate(fileList) if re.match(r'DNS([0-9]+)?', x.split('=')[0])]
+
+    configs = {}
+    for line in fileList:
+        try:
+            option, value = line.split('=')
+            configs[option] = value
+                
+        except:
+            err = []
+
+    for opt in opts:
+        left = opt.capitalize()
+
+        if opt == 'ip':
+            right = configs['IP']
+        if opt == 'email':
+            right = configs['CONTACTEMAIL']
+        if opt == 'plan':
+            right = configs['PLAN']
+        if opt == 'owner':
+            right = configs['OWNER']
+        if opt == 'creation':
+            right = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(float(configs['STARTDATE'])))
+        if opt == 'theme':
+            right = configs['RS']
+        if opt == 'domains':
+            domains = []
+            for num in domList:
+                domains.append(fileList[num].split('=')[-1])
+        if opt == 'limits':
+            limits = {}
+            if configs['DISK_BLOCK_LIMIT'] == '0':
+                limits['Disk Quota']     = 'unlimited'
+            else:
+                limits['Disk Quota']     = float(configs['DISK_BLOCK_LIMIT']) / 1048576
+
+            if 'BWLIMIT'                   in configs: limits['Bandwidth Limit']    = configs['BWLIMIT']
+            if 'MAXADDON'                  in configs: limits['Max Addon Domains']  = configs['MAXADDON']
+            if 'MAXSUB'                    in configs: limits['Max Subdomains']     = configs['MAXSUB']
+            if 'MAXPARK'                   in configs: limits['Max Parked Domains'] = configs['MAXPARK']
+            if 'MAXSQL'                    in configs: limits['Max Databases']      = configs['MAXSQL']
+            if 'MAXPASSENGERAPPS'          in configs: limits['Max Passenger Apps'] = configs['MAXPASSENGERAPPS']
+            if 'MAXFTP'                    in configs: limits['Max FTP Accounts']   = configs['MAXFTP']
+            if 'MAXPOP'                    in configs: limits['Max Email Accounts'] = configs['MAXPOP']
+            if 'MAX_EMAILACCT_QUOTA'       in configs: limits['Max Inbox Quota']    = configs['MAX_EMAILACCT_QUOTA']
+            if 'MAXLST'                    in configs: limits['Max Email Lists']    = configs['MAXLST']
+            if 'MAX_DEFER_FAIL_PERCENTAGE' in configs: limits['Max % Defer Fail']   = configs['MAX_DEFER_FAIL_PERCENTAGE']
+
+        if opt == 'domains':
+            domCount = 0
+            desc = opt.capitalize()
+            for dom in domains:
+                if args.clean:
+                    print(dom)
+                else:
+                    print(frmStr % (desc, dom))
+
+                if (domCount + 1) == len(domains) and not args.clean:
+                    print
+                else:
+                    domCount += 1
+                desc = ''
+        elif opt == 'limits':
+            domCount = 1
+            for limit in limits:
+                if args.clean:
+                    print(limits[limit])
+                else:
+                    print (frmStr % (limit, limits[limit])) 
+                    if domCount == len(limits):
+                        print
+                    else:
+                        domCount += 1
+        elif opt != 'clean': 
+            if args.clean:
+                print(right)
+            else:
+                print(frmStr % (left, right))
+                print
+
+parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
+                                    prefix_chars='-',
+                                    description="cInfo\n" + 
+                                                "       Retrieves information about specific accounts on cpanel servers.\n" +
+                                                "       Devin Shoemaker - 2019\n",
+                                    epilog=" ")
+parser.add_argument("-a", "--ip", help="retrieve IP address", action="store_true")
+parser.add_argument("-c", "--creation", help="retrieve account's creation date in local time", action="store_true")
+parser.add_argument("-d", "--domains", help="retrieve all domains owned by account", action="store_true")
+parser.add_argument("-e", "--email", help="retrieve account owner's email address", action="store_true")
+parser.add_argument("-l", "--limits", help="retrieve account limits", action="store_true")
+parser.add_argument("-o", "--owner", help="retrieve account's owner/reseller", action="store_true")
+parser.add_argument("-p", "--plan", help="retrieve account's plan", action="store_true")
+parser.add_argument("--clean", help="return clean output (no formatting)\n", action="store_true")
+parser.add_argument('user')
+
+args, unknown = parser.parse_known_args()
+
+runDex = []
+index = args.__dict__
+for arg in index:
+    if index[arg] and arg != 'user' and arg != 'clean':
+        runDex.append(arg)
+
+if len(runDex) == 0:
+    main(args.user)
+else:
+    main(args.user, runDex)
+
+
